@@ -30,21 +30,20 @@
  *
  * @module DUI.Stream
  * @author Micah Snyder <micah@digg.com>
- * @author Jordan Alperin <alpjor@digg.com>
+ * @author Jordan Alperin <alpjor@gmail.com>
  * @description A JavaScript MXHR client
  * @version 0.0.3
  * @link http://github.com/digg/dui
  *
  */
-(function($) {
-DUI.create('Stream', {
+DUI(function() { DUI.ns('Stream', new DUI.Class({
     pong: null,
     lastLength: 0,
     streams: [],
     listeners: {},
     
-    init: function() {
-        
+    init: function(url) {
+        this.load(url);
     },
     
     load: function(url) {
@@ -98,12 +97,7 @@ DUI.create('Stream', {
             //One last ping to clean up
             this.ping();
             
-            if(typeof this.listeners.complete != 'undefined') {
-                var _this = this;
-                $.each(this.listeners.complete, function() {
-                    this.apply(_this);
-                });
-            }
+            $(document).trigger('mxhr:complete');
         }
     },
     
@@ -211,27 +205,39 @@ DUI.create('Stream', {
            because it doesn't conform to the spec. QQ more noob, L2play, etc. */
         var mimeAndPayload = this.currentStream.split("\n");
         
-        var mime = mimeAndPayload.shift().split('Content-Type:', 2)[1].split(";", 1)[0].replace(' ', '');
+        //Handle multiple headers per payload
+        var headers = {};
+        while(/^[-a-z0-9]+:/i.test(mimeAndPayload[0])) {
+            var header = mimeAndPayload.shift().split(':');
+            
+            headers[header[0]] = $.trim(header[1]);
+        }
         
         //Better to have this null than undefined
-        mime = mime ? mime : null;
+        var mime = headers['Content-Type'] ? headers['Content-Type'] : null;
+        
+        //Let's make things a bit easier here
+        var selector = headers['X-MXHR-Selector'] ? headers['X-MXHR-Selector'] : document;
         
         //Get payload
         var payload = mimeAndPayload.join("\n");
         
-        //Try to fire the listeners for this mimetype
-        var _this = this;
-        if(typeof this.listeners[mime] != 'undefined') {
-            $.each(this.listeners[mime], function() {
-                this.apply(_this, [payload]);
-            });
-        }
+        $(selector).trigger('mxhr:part', [{
+            headers: headers,
+            selector: selector,
+            body: payload
+        }]);
         
-        //Set this.currentStream = null
         delete this.currentStream;
     },
     
     listen: function(mime, callback) {
+        //if there's one Function argument, we're adding the general listener
+        if(arguments.length == 1 && typeof callback != 'undefined' && mime.constructor == Function) {
+            callback = mime;
+            mime = 'all';
+        }
+        
         if(typeof this.listeners[mime] == 'undefined') {
             this.listeners[mime] = [];
         }
@@ -240,8 +246,7 @@ DUI.create('Stream', {
             this.listeners[mime].push(callback);
         }
     }
-});
-})(jQuery);
+}))});
 
 //Yep, I still use this. So what? You wanna fight about it?
 Function.prototype.bind = function() {
