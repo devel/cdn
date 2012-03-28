@@ -1,0 +1,2 @@
+#!/bin/sh
+for f in `ls *.js | grep -v .min.`; do b=`basename $f .js`; echo $b;  uglifyjs $b.js > $b.min.js ; done
